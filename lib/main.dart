@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,14 +22,177 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        // Fonte Cinzel definida como principal para o app todo
         textTheme: GoogleFonts.cinzelTextTheme(ThemeData.dark().textTheme),
       ),
-      home: const InventarioPagina(),
+      home: supabase.auth.currentSession != null ? const InventarioPagina() : const LoginPage(),
     );
   }
 }
 
+// --- FUNÇÃO AUXILIAR DE ERROS ---
+void mostrarErro(BuildContext context, Object e) {
+  // Isso vai nos mostrar o erro REAL que o Supabase está enviando
+  String mensagem = e.toString(); 
+  
+  if (e is AuthException) {
+    mensagem = e.message; // Pega a mensagem técnica do Supabase
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text("DEBUG: $mensagem"), 
+    backgroundColor: Colors.redAccent,
+  ));
+}
+
+// --- TELA DE LOGIN ---
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _email = TextEditingController();
+  final _senha = TextEditingController();
+  bool _carregando = false;
+
+  Future<void> _entrar() async {
+    setState(() => _carregando = true);
+    try {
+      await supabase.auth.signInWithPassword(email: _email.text.trim(), password: _senha.text.trim());
+      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const InventarioPagina()));
+    } catch (e) { mostrarErro(context, e); }
+    finally { setState(() => _carregando = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: Image.asset('assets/images/floresta.png', fit: BoxFit.cover)),
+          Container(color: Colors.black.withOpacity(0.7)),
+          
+          Center(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  Text("THE ARCHIVE", style: GoogleFonts.cinzel(fontSize: 32, letterSpacing: 10, color: Colors.white70)),
+                  const SizedBox(height: 40),
+
+                  // CARD PRINCIPAL DE LOGIN
+                  _buildGlassBlock(
+                    width: 340,
+                    child: Column(
+                      children: [
+                        Text("IDENTIFICAÇÃO", style: TextStyle(fontSize: 12, letterSpacing: 4, color: Colors.white54)),
+                        const SizedBox(height: 20),
+                        _buildInput(_email, "CORREIO ELETRÔNICO"),
+                        _buildInput(_senha, "CHAVE SECRETA", obscure: true),
+                        const SizedBox(height: 30),
+                        _buildBotao("ACESSAR CASTELO", _entrar, carregando: _carregando),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  // MINI BLOCO SEPARADO (ESTILO QUE VOCÊ PEDIU)
+                  _buildGlassBlock(
+                    width: 340,
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("Novo bruxo?", style: TextStyle(fontSize: 12, color: Colors.white38)),
+                        TextButton(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
+                          child: const Text("CRIAR CONTA", style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
+                        )
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- TELA DE CADASTRO (PÁGINA DIFERENTE) ---
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  final _email = TextEditingController();
+  final _senha = TextEditingController();
+  bool _carregando = false;
+
+  Future<void> _registrar() async {
+    setState(() => _carregando = true);
+    try {
+      await supabase.auth.signUp(email: _email.text.trim(), password: _senha.text.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Acesso solicitado! Faça seu login.")));
+        Navigator.pop(context);
+      }
+    } catch (e) { mostrarErro(context, e); }
+    finally { setState(() => _carregando = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: Image.asset('assets/images/floresta.png', fit: BoxFit.cover)),
+          Container(color: Colors.black.withOpacity(0.7)),
+          
+          Center(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  // CARD PRINCIPAL DE CADASTRO
+                  _buildGlassBlock(
+                    width: 340,
+                    child: Column(
+                      children: [
+                        Text("NOVO REGISTRO", style: TextStyle(fontSize: 12, letterSpacing: 4, color: Colors.white54)),
+                        const SizedBox(height: 20),
+                        _buildInput(_email, "E-MAIL"),
+                        _buildInput(_senha, "SENHA", obscure: true),
+                        const SizedBox(height: 30),
+                        _buildBotao("SOLICITAR ENTRADA", _registrar, carregando: _carregando, secundario: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  // MINI BLOCO PARA VOLTAR
+                  _buildGlassBlock(
+                    width: 340,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("JÁ SOU MEMBRO. VOLTAR.", style: TextStyle(fontSize: 10, color: Colors.white38, letterSpacing: 2)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- TELA DE INVENTÁRIO (DENTRO DO CASTELO) ---
 class InventarioPagina extends StatefulWidget {
   const InventarioPagina({super.key});
   @override
@@ -40,277 +200,77 @@ class InventarioPagina extends StatefulWidget {
 }
 
 class _InventarioPaginaState extends State<InventarioPagina> {
-  final _nomeController = TextEditingController();
-  final _quantidadeController = TextEditingController();
-  final _precoController = TextEditingController();
-  XFile? _imagemSelecionada;
-  bool _carregando = false;
-
-  // Selecionar imagem do PC/Dispositivo
-  Future<void> _selecionarImagem() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) setState(() => _imagemSelecionada = image);
-  }
-
-  // CREATE: Salvar no Banco
-  Future<void> _salvar() async {
-    if (_nomeController.text.isEmpty) {
-      _mostrarMensagem("Dê um nome ao item!", erro: true);
-      return;
-    }
-    setState(() => _carregando = true);
-
-    try {
-      String? imageUrl;
-      if (_imagemSelecionada != null) {
-        final fileBytes = await _imagemSelecionada!.readAsBytes();
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
-        final path = 'public/$fileName';
-        await supabase.storage.from('fotos_produtos').uploadBinary(path, fileBytes);
-        imageUrl = supabase.storage.from('fotos_produtos').getPublicUrl(path);
-      }
-
-      await supabase.from('produtos').insert({
-        'nome': _nomeController.text,
-        'quantidade': int.tryParse(_quantidadeController.text) ?? 0,
-        'preco': double.tryParse(_precoController.text) ?? 0.0,
-        'imagem_url': imageUrl,
-      });
-
-      _limparCampos();
-      _mostrarMensagem("Item registrado no arquivo.");
-      setState(() {});
-    } catch (e) {
-      _mostrarMensagem("Erro ao salvar: $e", erro: true);
-    } finally {
-      setState(() => _carregando = false);
-    }
-  }
-
-  // UPDATE: Incrementar quantidade (+1)
-  Future<void> _incrementar(int id, int qtd) async {
-    await supabase.from('produtos').update({'quantidade': qtd + 1}).eq('id', id);
-    setState(() {});
-  }
-
-  // DELETE: Remover do banco
-  Future<void> _deletar(int id) async {
-    await supabase.from('produtos').delete().eq('id', id);
-    _mostrarMensagem("Item removido.");
-    setState(() {});
-  }
-
-  void _limparCampos() {
-    _nomeController.clear();
-    _quantidadeController.clear();
-    _precoController.clear();
-    _imagemSelecionada = null;
-  }
-
-  void _mostrarMensagem(String msg, {bool erro = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: erro ? Colors.red : Colors.grey[900]),
-    );
-  }
+  // ... (Coloque aqui o seu código de produtos que já fizemos)
+  // Certifique-se de usar a imagem 'assets/images/fundo.png' no fundo aqui.
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Imagem de Fundo (Nítida)
-          Positioned.fill(child: Image.asset('assets/images/fundo.png', fit: BoxFit.cover)),
-
-          SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                Text("ARQUIVO MÁGICO", style: GoogleFonts.cinzel(fontSize: 28, letterSpacing: 8, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-
-                // ÁREA DE INPUTS (Mais visível)
-                _buildVidro(
-                  margem: 20,
-                  filho: Column(
-                    children: [
-                      Row(
-                        children: [
-                          GestureDetector(
-                            onTap: _selecionarImagem,
-                            child: Container(
-                              width: 80, height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.white24),
-                              ),
-                              child: _imagemSelecionada == null 
-                                ? const Icon(Icons.add_a_photo, color: Colors.white70)
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: kIsWeb 
-                                      ? Image.network(_imagemSelecionada!.path, fit: BoxFit.cover)
-                                      : Image.file(File(_imagemSelecionada!.path), fit: BoxFit.cover),
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(child: _buildCampo(_nomeController, "NOME DO ITEM")),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(child: _buildCampo(_quantidadeController, "ESTOQUE", num: true)),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildCampo(_precoController, "PREÇO (G)", num: true)),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5))
-                          ),
-                          onPressed: _carregando ? null : _salvar, 
-                          child: _carregando 
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                            : const Text("REGISTRAR NO ARQUIVO"),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // LISTA DE BLOCOS GRANDES
-                Expanded(
-                  child: FutureBuilder(
-                    future: supabase.from('produtos').select().order('created_at', ascending: false),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.white24));
-                      final lista = snapshot.data as List;
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: lista.length,
-                        itemBuilder: (context, index) {
-                          final item = lista[index];
-                          final preco = (item['preco'] as num).toDouble();
-                          
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 15),
-                            child: _buildBlocoItem(item, preco),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Ícone sobre a estrela no canto inferior direito
-          Positioned(
-            bottom: 25, right: 25,
-            child: Icon(Icons.auto_awesome, color: Colors.white.withOpacity(0.3), size: 30),
-          ),
+      appBar: AppBar(
+        title: Text("ARQUIVO INTERNO", style: GoogleFonts.cinzel(fontSize: 14, letterSpacing: 4)),
+        backgroundColor: Colors.black,
+        actions: [
+          IconButton(
+            onPressed: () async {
+              await supabase.auth.signOut();
+              if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+            },
+            icon: const Icon(Icons.logout, size: 18),
+          )
         ],
       ),
+      body: Container() // Aqui entra seu código da lista de blocos grandes
     );
   }
+}
 
-  // Widget para os blocos grandes da lista
-  Widget _buildBlocoItem(Map item, double preco) {
-    return _buildVidro(
-      margem: 0,
-      filho: InkWell(
-        onTap: () => _incrementar(item['id'], item['quantidade']),
-        child: Row(
-          children: [
-            // Imagem Grande Lateral
-            Container(
-              width: 100, height: 100,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.black45,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: item['imagem_url'] != null 
-                  ? Image.network(item['imagem_url'], fit: BoxFit.cover)
-                  : const Icon(Icons.auto_fix_normal, color: Colors.white10, size: 40),
-              ),
-            ),
-            const SizedBox(width: 15),
-            // Informações
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item['nome'].toString().toUpperCase(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                  const SizedBox(height: 5),
-                  Text("DISPONÍVEL: ${item['quantidade']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                  const SizedBox(height: 10),
-                  Text("${preco.toStringAsFixed(2)} GALEÕES", 
-                    style: TextStyle(
-                      color: preco > 100 ? Colors.greenAccent.withOpacity(0.6) : Colors.redAccent.withOpacity(0.6),
-                      fontSize: 14, fontWeight: FontWeight.bold
-                    )),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.white38),
-              onPressed: () => _deletar(item['id']),
-            )
-          ],
+// --- WIDGETS DE ESTILO COMPARTILHADO ---
+
+Widget _buildGlassBlock({required Widget child, double? width, EdgeInsets? padding}) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(15),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+      child: Container(
+        width: width,
+        padding: padding ?? const EdgeInsets.all(25),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
         ),
+        child: child,
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // Auxiliar para criar o efeito de vidro
-  Widget _buildVidro({required Widget filho, required double margem}) {
-    return Container(
-      margin: EdgeInsets.all(margem),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5), // Mais visível
-              border: Border.all(color: Colors.white10),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: filho,
-          ),
-        ),
-      ),
-    );
-  }
+Widget _buildInput(TextEditingController controller, String label, {bool obscure = false}) {
+  return TextField(
+    controller: controller,
+    obscureText: obscure,
+    style: const TextStyle(fontSize: 13, color: Colors.white),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 2),
+      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
+      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white54)),
+    ),
+  );
+}
 
-  // Auxiliar para os campos de texto
-  Widget _buildCampo(TextEditingController controller, String label, {bool num = false}) {
-    return TextField(
-      controller: controller,
-      keyboardType: num ? TextInputType.number : TextInputType.text,
-      style: GoogleFonts.cinzel(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.cinzel(color: Colors.white54, fontSize: 12),
-        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+Widget _buildBotao(String texto, VoidCallback acao, {bool carregando = false, bool secundario = false}) {
+  return SizedBox(
+    width: double.infinity,
+    child: OutlinedButton(
+      onPressed: carregando ? null : acao,
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: secundario ? Colors.white12 : Colors.white24),
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
       ),
-    );
-  }
+      child: carregando 
+        ? const SizedBox(height: 15, width: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+        : Text(texto, style: const TextStyle(color: Colors.white, fontSize: 11, letterSpacing: 3)),
+    ),
+  );
 }

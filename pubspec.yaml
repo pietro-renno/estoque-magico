@@ -25,3 +25,4 @@ flutter:
   # Configuração da imagem de fundo
   assets:
     - assets/images/fundo.png
+    - assets/images/floresta.png
